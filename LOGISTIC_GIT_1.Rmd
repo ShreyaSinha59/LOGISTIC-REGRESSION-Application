@@ -1,0 +1,166 @@
+---
+title: "GIT_LOGISTIC2"
+author: "shreya"
+date: "1/14/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# LOGISTIC REGRESSION 
+
+
+# READING FILES
+```{r}
+library("readxl")
+LogisticR= read_excel("C:/Users/DELL/OneDrive/Desktop/ML PROJECTS/ISI/Dataset/mODULE3/LogisticR.xlsx")
+mytable=table(LogisticR$default,LogisticR$student)
+mytable
+
+```
+
+#VISUALIZING THE CATEGORICAL VARIABLES
+```{r}
+#Using Mosaic plot to check if student has impact or not
+mosaicplot(mytable) 
+boxplot(LogisticR$balance~LogisticR$default)
+LogisticR$y=as.factor(LogisticR$default) #we convert to factors for cdplot
+
+#CONDITIONAL DENSITY PLOT
+cdplot(LogisticR$y~LogisticR$balance)
+
+#colorful plot
+library(ggplot2)
+ggplot(LogisticR,aes(x=LogisticR$balance,fill=LogisticR$y))+geom_histogram(position='fill')
+
+
+# CHECKING NUMBER OF 1S VS 0S PLOT and checking interaction
+ggplot(LogisticR,aes(x=balance,y=income))+geom_point(aes(color=y))
+
+
+```
+
+First plot is Mosaicplot , It shows if being a student or not has an impact on having a default and how much.Firstly proportion of non defaulters(0) is more of defaulters(1). Here we see by mosaic plot when theres no default(1) the proportion of being a sting a student is more than in case of no defaulter (0). The deficit in the plot is that  cant take more than 2 categories and cant see the pattern . And hence we create a cd plot
+
+Second Plot is Box Plot . It shows people who are not defaulter have lower balance average whereas people who are defaulters have higherbalance average. 
+
+Third plot is the CONDITIONAL DENSITY PLOT or cdplot. This is conditional prob plot. y is 0 and 1 showing non defaulter and defaulters.Black plot is defaulter and white is non default. X is balance. Up to 1000 all is non default and then default. Up to 1000 default rate is low then its increasing. Better to have cdplot . Boxplot or Mosaic shows only abt averages .CD plot is showing what happens with increase in balance
+
+Fourth Plot is ggplot .Its representing cdplot.  Pink represent non defaulter and 1 is defaulter 
+
+if x is discrete we do mosaicplot if its continuous we do cdplot or geom-hist
+
+Fifth Plot  .This plot shows interaction. As balance we can say higher chance of defaulting.however same cant be said for income. Ininteraction means spread would be different . it would have been in all direction or something. i.e balance and income does not effect y together. Its also showing proportion of 1s as compared to 0's
+
+
+# FITTING LOGISTIC REGRESSION
+
+```{r}
+##glm binomial 
+fit=glm(LogisticR$default~LogisticR$balance,family=binomial)
+summary(fit)
+#here family is binomial as its binary classificcation. in case of 3 we can keepit discrete binomial distr or ordinal distr
+fit2=glm(LogisticR$default~LogisticR$balance+LogisticR$student,family=binomial)
+summary(fit$fitted.values)
+plot(density(fit$fitted.values))
+```
+
+
+## Evaulating the model
+
+```{r}
+## HOSLEM TEST
+library(ResourceSelection)
+hoslem.test(LogisticR$default,fitted(fit),g=11)
+
+##CONFUSION MATRIX
+library(caret)
+library(car)
+#predclass=ifelse(predict(fit,type="response")>0.5,1,0)
+
+predclass=ifelse(predict(fit,type="response")>0.5,1,0)
+  #classifies as 1 if greater than 0.5 or 
+#u=union(predclass,LogisticR$default)
+#mytable=table(factor(predclass,u),factor(LogisticR$default,u))
+mytable=table(factor(predclass),factor(LogisticR$default))
+names(dimnames(mytable))=c("predclass","default")
+confusionMatrix(mytable)
+
+
+## ROC CURVE
+library(verification)
+prob1=predict(fit,type="response")
+prob2=predict(fit2,type='response')
+plot(density(prob1),col='blue')
+lines((density(prob2)),col='red')
+roc.plot(x=LogisticR$default,pred=prob1,legend=TRUE,
+         xlab="1-specifity",ylab="Sensitivity",
+         leg.text=c("Model with Balance"))$roc.vol
+library(verification)
+roc.plot(x = LogisticR$default,pred=cbind(prob1,prob2), legend = TRUE,xlab="1-Specificity",ylab="Sensitivity",leg.text = c("Model with Balance","Model with Balance and Student"))$roc.vol
+## Area under curve
+library(pROC)
+roccurve=roc(LogisticR$default~prob1)
+plot(1-roccurve$specificities,roccurve$sensitivities,
+     xlab="1-specificity",ylab="sensitivity",main="roc curve", pch=19,col="red",lwd=2)
+abline(a=0,b=1)
+text(0.8,0.2,"Are under the curve=")
+text(0.95,0.1,round(auc(roccurve),4))
+
+## SELECTING ACCURATE CUTOFF VALUE
+library(InformationValue)
+predicted=predict(fit,type="response")
+
+optCutOff <- optimalCutoff(LogisticR$default, predicted,optimiseFor = "misclasserror", returnDiagnostics = TRUE)
+optCutOff
+print(optCutOff)
+
+## checking confusion matri after changing
+predclass2=ifelse(predict(fit,type="response")>0.4,1,0)
+  #classifies as 1 if greater than 0.5 or 
+#u=union(predclass,LogisticR$default)
+#mytable=table(factor(predclass,u),factor(LogisticR$default,u))
+mytable=table(factor(predclass2),factor(LogisticR$default))
+names(dimnames(mytable))=c("predclass","default")
+confusionMatrix(mytable2)
+
+```
+The first test we did to check model adequacy is Hosmer-Lemeshow goodness of fit test.  We see as p value in the case is greater than 0.05 we conclude model fits well
+
+Second model is Confusion Matrix. #this model is bad for specifity as only 35%. whereas sensitivity is 99%. here sensitivity is predicting 0 whereas specificity is predicting 1. we are modelling for 1. p is prob of defaulter
+0 is non defaut and 1 is default.p>0.5  then 1.No information rate is 96% i.e 96% are 0. if we see all of them at 0 model is 96% . however accuracy is 97% so 1% better. Balanced accuracy is 67%. if balanced accuracy and actual differs a lot means one class prediction is not correct. here we are accurate in prediciting 0 by 99% but redicting defaulter is only 35%. If u dont feel model is good we can add more variables or change cutoff. Balanced accuracy is (sensitivuty+specifity)/2usually target class has lower values.No information error means what if u predict all of them into majority class ie prediciting all are non deaulters
+
+Third plot is ROC Curvewhere we are plotting sensitivity(true positive) to  100- specificity(false positive). closer it is to upper half ot is more overall accurate.AUC - ROC curve is a performance measurement for the classification problems at various threshold settings. It tells how much the model is capable of distinguishing between classes. Higher the AUC, the better the model is at predicting 0s as 0s and 1s as 1s.
+area uder curve in this case is 95%, This shows the curve is good at classifying 0's and 1's
+
+Finally we are trying to find optimal cutoff value to classify 0 and 1s. #if we see cutoff value  from0.99 to0.00 . we see all range of cutoff value. false positivity ,specificity,sensitivity ,misclassification. if we take 0.99 everybody is classified as good . Hence misclassification error is highest ere with 0.390. error rate is slowly here. misclassification decreases and lowest is found at 0.280.TPR is sensitivity. initially we take cutoff value as 0.5. if we change cutoff from 0 to 1 how does sensitivity and sepcifity change. we can see which we have most accurate. hence when we change from 0.5 to 0.4 accuracy increase.check where theres lowest misclass error
+
+now in confusion matrix we see the accuracy has risen
+
+## FINAL MODEL
+
+```{r}
+## FINAL MODEL
+nullmodel=glm(LogisticR$default~1,family="binomial")
+#null model dosent carry any information
+summary(nullmodel)
+#here null and resiual deviance have same value as no x is involved
+
+##full model
+library(car)
+fullmodel=glm(LogisticR$default~LogisticR$student+LogisticR$balance+LogisticR$income,family="binomial")
+vif(fullmodel)
+#all values are less than 5 hence no multicollinearity
+#now we try to go from null model to full model to get subset
+library(MASS)
+model=stepAIC(nullmodel,scope=list(lower=nullmodel,upper=fullmodel),direction='both')
+summary(model)
+#hence we develop null model,ful modell ,selecting subset.selecting using step aic . then get model aic we can select optimum cutoff . then see model accuracy ,specificity,sensititvy, we the go for interaction
+
+#In stepwise function for logistic regression we are using stepwise by MLE METHOD instead of OLS as OLS cant evaluate proportions. However MLE stepwise can be used even for first case 
+
+```
+
+This is the full model using stepwise function. 
